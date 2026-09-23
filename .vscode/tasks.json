@@ -1,0 +1,63 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "🧹 Flutter Clean & 📦 Get Dependencies",
+            "type": "shell",
+            "command": "fvm flutter clean && fvm flutter pub get",
+            "problemMatcher": []
+        },
+        {
+            "label": "✨ Format Code",
+            "type": "shell",
+            "command": "dart format --set-exit-if-changed .",
+            "problemMatcher": []
+        },
+        {
+            "label": "🔍 Analyze Code",
+            "type": "shell",
+            "command": "dart analyze --fatal-infos --fatal-warnings .",
+            "problemMatcher": []
+        },
+        {
+            "label": "📱 Build APK",
+            "type": "shell",
+            "command": "fvm flutter build apk --release -t lib/main.dart",
+            "group": "build",
+            "problemMatcher": [
+                "$dart-build_runner"
+            ],
+            "detail": "🤖 Build APK"
+        },
+        {
+            "label": "📦 Build Android AAB",
+            "type": "shell",
+            "command": "fvm flutter build appbundle --obfuscate --split-debug-info=out/android -t lib/main.dart",
+            "group": "build",
+            "problemMatcher": [
+                "$dart-build_runner"
+            ],
+            "detail": "🔒 Build Android App Bundle"
+        },
+        {
+            "label": "🍎 Build iOS (Flavor)",
+            "type": "shell",
+            "command": "fvm flutter build ios --release -t lib/main.dart",
+            "group": "build",
+            "problemMatcher": [
+                "$dart-build_runner"
+            ],
+            "detail": "📱 Build iOS app"
+        },
+        {
+            "label": "🍎 Build iOS IPA",
+            "type": "shell",
+            "command": "fvm flutter build ipa --release -t lib/main.dart",
+            "group": "build",
+            "problemMatcher": [
+                "$dart-build_runner"
+            ],
+            "detail": "📦 Build iOS IPA"
+        }
+    ]
+}
