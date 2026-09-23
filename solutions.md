@@ -1,89 +1,42 @@
 # Assessment solutions
 
-Working notes maintained during the assessment. Incomplete sections are marked
-as pending and will be reviewed before submission.
+## RES-101 — Search shows results for the wrong query
 
-## Current status
+**Reproduction:** Typing `sushi` letter by letter caused shorter-query results
+to replace the results for the full keyword.
 
-- Assessment email, README, full brief, and relevant starter code inspected with Codex.
-- Project architecture, dependency registration, navigation, and data flow reviewed with Codex.
-- No bug ticket or feature work recorded yet.
-- No application runs, bug reproductions, tests, or performance measurements recorded yet.
+**Root cause:** Search requests completed out of order, and every response
+could overwrite the results and loading state without checking whether its
+query was still current. The simulated backend gives shorter queries longer
+delays, making this race easy to trigger.
 
-## Time notes
+**Fix:** Increment a version immediately on every query change. Only the
+current version may update results, report errors, or clear loading. A 300 ms
+debouncer reduces requests while typing; the version checks prevent stale
+responses from affecting the current search.
 
-Times will use Asia/Yangon (UTC+06:30). Active work estimates will account for
-reported breaks; elapsed time alone will not be treated as active work.
+**Alternative considered:** During review, considered debouncing alone. It
+reduces requests but cannot prevent an already-running request from returning
+outdated results, so version checks are also needed.
 
-| Date | Activity | Time spent |
-| --- | --- | --- |
-| 2026-09-23 | Assessment review and explanation of the documentation requirements with Codex | Not timed; retrospective estimate pending |
-| 2026-09-23 | Project onboarding with Codex: architecture, data flow, and assessment boundaries | Assistant source inspection began at 11:25:13; applicant active time not measured, estimate pending |
+**Edge cases and limits:** Clearing input, including whitespace-only input,
+resets the state and cancels the debounce. Closing the controller cancels the
+timer and invalidates pending work. Older responses are ignored even during
+the next debounce interval. In-flight API calls finish rather than being
+cancelled. Current-query errors retain the existing console logging.
 
-Ticket timing has not started.
-
-## Ticket and feature notes
-
-No tickets or features attempted yet.
-
-<!-- For each ticket or feature, record:
-- Ticket ID and title
-- Start, pause/resume, and finish times as reported
-- Approximate active time spent
-- Reproduction steps and observed behavior (for bugs)
-- Root cause, distinguishing hypotheses from verified findings
-- Implementation and why it addresses the cause
-- At least one alternative considered and rejected, with reasons
-- Verification actually performed and its results
-- Edge cases considered, deliberately unhandled cases, and remaining limitations
-- Related AI log entries and commit(s)
--->
+**Verification:** Focused Dart analysis of the search controller and debounce
+utility passed.
 
 ## AI usage log
 
-### AI-001 — Assessment review and workflow preparation
+- **Codex — preparation:** Explained the assessment requirements, project
+  architecture, and data flow from the local brief and source code.
+- **Codex — RES-101:** Suggested the reproduction procedure, reviewed the
+  existing implementation, ran
+  focused Dart analysis, and helped document the diagnosis and decisions.
 
-- **Date:** 2026-09-23
-- **Tool:** Codex
-- **Purpose:** Understand the assessment and how to record the work.
-- **Assistance:** Read the local assessment email, `README.md`, `PROBLEM.md`,
-  and relevant starter code; summarized the bug tickets, features, constraints,
-  grading criteria, and deliverables; explained how to keep time notes and an
-  AI usage log alongside normal fix/test/commit work; created this draft log.
-- **Evidence and limits:** The summary was checked against the local brief and
-  source files. Code observations came from static inspection; no runtime
-  behavior or proposed fix has been verified yet.
-- **Decision:** Keep these notes as work proceeds. Begin timing the first
-  ticket when the applicant explicitly starts it.
-
-### AI-002 — Project onboarding
-
-- **Date:** 2026-09-23
-- **Tool:** Codex
-- **Purpose:** Understand how the existing app is organized before starting a ticket.
-- **Assistance:** Traced startup in `main.dart`, route bindings and dependency
-  injection, the search request/response path, shared cart state, checkout,
-  analytics, model parsing, and the simulated API. Mapped responsibilities to
-  source folders and clarified the assessment's protected files and pinned
-  toolchain. Prepared a static diagram and a suggested reading order.
-- **Evidence and limits:** Based on local source inspection and the assessment
-  brief. The business API is simulated in memory, while deal images and map
-  tiles use external URLs. No runtime behavior, tests, or performance claims
-  were verified during this onboarding.
-- **Boundaries:** `lib/service/fake_api_service.dart` and `assets/data/` are
-  readable but must not be edited. Other services, models, repositories,
-  controllers, widgets, and tests are available for task-related changes.
-- **Outcome:** Onboarding notes prepared; no ticket started or application
-  code changed by Codex.
-
-### Incorrect or misleading AI suggestions
-
-No actual incidents recorded yet. The assessment requires at least two concrete
-examples across the submission. For each real incident, record the suggestion,
-the evidence that exposed its problem, and what was done instead.
-
-The search-debounce example used while explaining the log was hypothetical;
-it is not an actual incident and does not count toward this requirement.
+**Incorrect or misleading suggestions:** No actual incidents recorded yet.
 
 ## Design questions
 
@@ -101,8 +54,9 @@ choose the appropriate scope.
 Pending: describe a test that would catch the pickup-time bug and any code
 changes needed to make it testable.
 
-## Total time and one more day
+## Time spent and next steps
 
-- **Approximate total active time:** Pending.
-- **What remains unfinished:** All bug tickets, features, and design answers.
-- **What I would do with one more day:** Pending; decide based on the completed work.
+- **RES-101:** About 15 minutes elapsed on 2026-09-23;
+- **Remaining work:** RES-102 through RES-107, features, and design answers are not yet
+  documented as completed.
+- **With one more day:** Pending; decide based on the completed work.
