@@ -28,6 +28,28 @@ cancelled. Current-query errors retain the existing console logging.
 **Verification:** Focused Dart analysis of the search controller and debounce
 utility passed.
 
+## RES-102 — Crash after leaving My orders
+
+**Root cause:** `PickupCountdown.initState()` started a periodic timer that
+called `setState()` every second without storing or cancelling the timer.
+After leaving My orders, the widget state was disposed, but the timer kept
+running and called `setState()` on that disposed state.
+
+**Fix:** Store the timer in a `late final Timer` field and call
+`_timer.cancel()` in the widget state's `dispose()`, before `super.dispose()`.
+This stops callbacks and releases the timer's reference to the state.
+
+**Alternative considered:** A `mounted` check alone would avoid the invalid
+`setState()` call but leave the periodic timer and its reference to the state
+alive. Cancelling the timer addresses the underlying resource leak.
+
+**Edge cases and limits:** Cleanup also applies when leaving before the first
+tick or repeatedly opening and closing the screen. While the widget remains
+mounted, the timer still ticks after pickup opens; that behavior is unchanged.
+
+**Verification:** Reviewed the implementation and ran focused Dart analysis:
+no issues found.
+
 ## AI usage log
 
 - **Codex — preparation:** Explained the assessment requirements, project
@@ -35,6 +57,9 @@ utility passed.
 - **Codex — RES-101:** Suggested the reproduction procedure, reviewed the
   existing implementation, ran
   focused Dart analysis, and helped document the diagnosis and decisions.
+- **Codex — RES-102:** Traced order loading and countdown creation, identified
+  the uncancelled timer, suggested cancelling it in `dispose()`, reviewed the
+  implemented fix, and ran focused Dart analysis.
 
 **Incorrect or misleading suggestions:** No actual incidents recorded yet.
 
@@ -57,6 +82,7 @@ changes needed to make it testable.
 ## Time spent and next steps
 
 - **RES-101:** About 15 minutes elapsed on 2026-09-23;
-- **Remaining work:** RES-102 through RES-107, features, and design answers are not yet
-  documented as completed.
+- **RES-102:** About 5 minutes.
+- **Remaining work:** RES-103 through RES-107,
+  features, and design answers are not yet documented as completed.
 - **With one more day:** Pending; decide based on the completed work.
