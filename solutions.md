@@ -73,6 +73,32 @@ starting work on a closed controller. A second check after `await` is to prevent
 **Verification:** Reviewed the worker cleanup and ran focused Dart analysis:
 no issues found.
 
+## RES-104 — Duplicate deals in the home feed
+
+**Reproduction setup:** Added a temporary delay to pagination to make it
+easier to refresh while a page request was pending; removed it from the fix.
+
+**Root cause:** Refresh reset `_page` to 1 while an older pagination request
+could still append its results. The list and page number became inconsistent,
+so a later load requested and appended the same page again.
+
+**Fix:** `_isRefreshing` blocks load-more while refresh is pending. Refresh
+can still interrupt pagination: it increments `_feedVersion`, and
+`_isCurrentFeed` rejects obsolete responses and cleanup. Each load uses a
+local `nextPage`, updating `_page` only after an accepted successful response.
+
+**Alternative considered:** Rejected Codex's extra request counter and custom
+footer-state handling as unnecessarily complicated and hard to maintain.
+
+**Edge cases and limits:** Version checks also guard errors and `finally`,
+so old requests cannot clear newer loading flags. Failed refreshes preserve
+the existing feed and page; failed pagination can retry the same page.
+Successful refresh resets the end-of-list footer. Pending requests finish,
+but obsolete responses or responses after controller closure are ignored.
+
+**Verification:** Reviewed the implementation and ran focused Dart analysis:
+no issues found.
+
 ## AI usage log
 
 - **Codex — preparation:** Explained the assessment requirements, project
@@ -86,8 +112,19 @@ no issues found.
 - **Codex — RES-103:** Reviewed the applicant's diagnosis, traced the worker
   subscription in application and GetX source, and explained controller-owned
   cleanup. Reviewed the implemented fix, ran focused Dart analysis.
+- **Codex — RES-104:** Traced refresh and pagination, explained how a stale
+  page response corrupts page state, and implemented an initial fix that I
+  rejected as too complicated to maintain. Reviewed my simpler replacement
+  and ran focused Dart analysis.
 
-**Incorrect or misleading suggestions:** No actual incidents recorded yet.
+**Incorrect or misleading suggestions:**
+
+1. **RES-104 — Overcomplicated implementation:** Codex added a separate load
+   request counter and custom deferred footer-state handling alongside feed
+   versioning. On review, I found the added complexity made a focused race
+   condition fix harder to understand and maintain. I discarded the changes
+   and implemented a simpler solution using a refresh flag, feed version,
+   and the existing refresh-controller methods.
 
 ## Design questions
 
@@ -110,5 +147,7 @@ changes needed to make it testable.
 - **RES-101:** About 15 minutes elapsed on 2026-09-23;
 - **RES-102:** About 5 minutes.
 - **RES-103:** About 10 minutes for inspection and the solution.
-- **Remaining work:** RES-104 through RES-107, features, and design answers are not yet documented as completed.
+- **RES-104:** About 25 minutes for inspection and the solution.
+- **Remaining work:** RES-105 through
+  RES-107, features, and design answers.
 - **With one more day:** Pending; decide based on the completed work.

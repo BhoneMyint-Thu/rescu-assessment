@@ -23,6 +23,9 @@ class HomeController extends GetxController {
   int _page = 1;
   int _totalPages = 1;
   bool _isFetchingMore = false;
+  int _feedVersion = 0;
+  bool _isRefreshing = false;
+  bool _isCurrentFeed(int version) => !isClosed && version == _feedVersion;
 
   bool get hasMore => _page < _totalPages;
 
@@ -56,31 +59,78 @@ class HomeController extends GetxController {
   }
 
   Future<void> refreshDeals() async {
-    _page = 1;
-    final res = await dealRepo.fetchDeals(page: 1);
-    _totalPages = res.totalPages;
-    deals.assignAll(res.items);
-    refreshController.refreshCompleted();
+    if (isClosed) return;
+    final version = ++_feedVersion;
+    _isRefreshing = true;
+    _isFetchingMore = false;
+    refreshController.loadComplete();
+
+    try {
+      final res = await dealRepo.fetchDeals(page: 1);
+
+      if (!_isCurrentFeed(version)) return;
+
+      _page = 1;
+      _totalPages = res.totalPages;
+      deals.assignAll(res.items);
+
+      refreshController.refreshCompleted(resetFooterState: true);
+    } catch (e) {
+      if (!_isCurrentFeed(version)) return;
+
+      LogService.error('refreshDeals failed', e);
+      refreshController.refreshFailed();
+    } finally {
+      if (_isCurrentFeed(version)) {
+        _isRefreshing = false;
+      }
+    }
+    // _page = 1;
+    // final res = await dealRepo.fetchDeals(page: 1);
+    // _totalPages = res.totalPages;
+    // deals.assignAll(res.items);
+    // refreshController.refreshCompleted();
   }
 
   Future<void> loadMore() async {
-    if (_isFetchingMore) return;
+    if (isClosed || _isFetchingMore) return;
+    if (_isRefreshing) {
+      refreshController.loadComplete();
+      return;
+    }
     if (!hasMore) {
       refreshController.loadNoData();
       return;
     }
+    final version = _feedVersion;
+    final nextPage = _page + 1;
     _isFetchingMore = true;
-    _page++;
     try {
-      final res = await dealRepo.fetchDeals(page: _page);
+      final res = await dealRepo.fetchDeals(page: nextPage);
+      if (!_isCurrentFeed(version)) return;
+      _page = nextPage;
       _totalPages = res.totalPages;
       deals.addAll(res.items);
     } catch (e) {
+      if (!_isCurrentFeed(version)) return;
+
       LogService.error('loadMore failed', e);
-      _page--;
+    } finally {
+      if (_isCurrentFeed(version)) {
+        _isFetchingMore = false;
+        refreshController.loadComplete();
+      }
     }
-    _isFetchingMore = false;
-    refreshController.loadComplete();
+    // try {
+    //   final res = await dealRepo.fetchDeals(page: _page);
+    //   _totalPages = res.totalPages;
+    //   deals.addAll(res.items);
+    // } catch (e) {
+    //   LogService.error('loadMore failed', e);
+    //   _page--;
+    // }
+    // _isFetchingMore = false;
+    // refreshController.loadComplete();
   }
 
   void scrollToTop() {
@@ -90,6 +140,7 @@ class HomeController extends GetxController {
 
   @override
   void onClose() {
+    ++_feedVersion;
     scrollController.dispose();
     refreshController.dispose();
     super.onClose();
