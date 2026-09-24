@@ -50,6 +50,29 @@ mounted, the timer still ticks after pickup opens; that behavior is unchanged.
 **Verification:** Reviewed the implementation and ran focused Dart analysis:
 no issues found.
 
+## RES-103 — Requests pile up the longer you browse
+
+**Reproduction:** cart changes trigger
+availability requests for previously visited deal pages.
+
+**Root cause:** Each `DealDetailsController` created an `ever` subscription to
+the permanent cart service's `itemCount`, but discarded the returned `Worker`.
+The subscription survived controller closure, retained the controller through
+its callback, and kept fetching that controller's deal on cart changes.
+
+**Fix:** Keep the returned worker in `_cartWorker` and dispose it in the
+controller's `onClose()`. This ends the subscription when its owner closes.
+
+**Alternative considered:** An `isClosed` guard alone can suppress requests
+but leaves the subscription and retained controller alive.
+
+**Edge case:** Disposing the worker does not cancel an already-running API
+request. The `isClosed` check is before `await`, which prevents
+starting work on a closed controller. A second check after `await` is to prevent updating state if the controller closes during the fetch.
+
+**Verification:** Reviewed the worker cleanup and ran focused Dart analysis:
+no issues found.
+
 ## AI usage log
 
 - **Codex — preparation:** Explained the assessment requirements, project
@@ -60,6 +83,9 @@ no issues found.
 - **Codex — RES-102:** Traced order loading and countdown creation, identified
   the uncancelled timer, suggested cancelling it in `dispose()`, reviewed the
   implemented fix, and ran focused Dart analysis.
+- **Codex — RES-103:** Reviewed the applicant's diagnosis, traced the worker
+  subscription in application and GetX source, and explained controller-owned
+  cleanup. Reviewed the implemented fix, ran focused Dart analysis.
 
 **Incorrect or misleading suggestions:** No actual incidents recorded yet.
 
@@ -83,6 +109,6 @@ changes needed to make it testable.
 
 - **RES-101:** About 15 minutes elapsed on 2026-09-23;
 - **RES-102:** About 5 minutes.
-- **Remaining work:** RES-103 through RES-107,
-  features, and design answers are not yet documented as completed.
+- **RES-103:** About 10 minutes for inspection and the solution.
+- **Remaining work:** RES-104 through RES-107, features, and design answers are not yet documented as completed.
 - **With one more day:** Pending; decide based on the completed work.
