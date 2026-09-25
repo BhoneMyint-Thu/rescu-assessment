@@ -153,6 +153,35 @@ These results do not claim an equivalent reduction in total app memory.
 **Verification:** Reviewed and approved the implementation, captured the
 DevTools evidence above, and ran focused Dart analysis with no issues found.
 
+## RES-106 — Pickup times and the today filter
+
+**Root cause:** `PickupWindowModel.label` formatted parsed UTC timestamps without
+converting them to the pickup timezone. `isToday` compared the UTC start's
+day number with the device-local current day and ignored month and year.
+The backend serves the Bangkok market (UTC+7); device-local and market time
+are not necessarily the same.
+
+**Reproduction:** Ran the existing model in a temporary Dart probe with
+`TZ=Asia/Bangkok`. A window starting today at 06:00 and ending at 09:30
+displayed `23:00 – 02:30`, and `isToday` returned false. A noon window on the
+same day number next year incorrectly returned true.
+
+**Fix:** Keep the original UTC instants and derive Bangkok
+calendar values only for labels and date checks. Compare year, month, and day.
+`isToday` delegates to `isTodayAt(now)` so tests can supply a fixed clock.
+Countdown and availability calculations continue to use the original instants.
+
+**Alternative considered:** `toLocal()` alone would use the phone's timezone,
+which may differ from the store's Bangkok timezone.
+
+**Edge cases and limits:** Covers midnight, month/year boundaries, and local
+or UTC inputs. Overnight windows are classified by their start date. The fixed
+UTC+7 conversion is specific to this Bangkok market; other store timezones and
+automatic screen updates at midnight are outside this change.
+
+**Verification:** Reviewed and approved the implementation. Focused Dart
+analysis passed.
+
 ## AI usage log
 
 - **Codex — preparation:** Explained the assessment requirements, project
@@ -175,6 +204,10 @@ DevTools evidence above, and ran focused Dart analysis with no issues found.
   reactivity, lazy feed cards, and image decode sizing. I reviewed and approved
   the changes and simplified the sizing to use display width. Codex checked
   the code with Dart analysis and helped summarize my DevTools screenshots.
+- **Codex — RES-106:** Traced UTC pickup timestamps through the shared model,
+  labels, and home filter; checked Dart/intl behavior and reproduced the
+  formatting and date-comparison bugs with a temporary Dart probe. Implemented
+  the Bangkok-time fix and checked the model with Dart analysis. I reviewed and approved it.
 
 **Incorrect or misleading suggestions:**
 
@@ -208,5 +241,6 @@ changes needed to make it testable.
 - **RES-103:** About 10 minutes for inspection and the solution.
 - **RES-104:** About 25 minutes for inspection and the solution.
 - **RES-105:** About 30 minutes of active work.
-- **Remaining work:** RES-106 and RES-107, features, and design answers.
+- **RES-106:** About 10 minutes of active work.
+- **Remaining work:** RES-107, features, and design answers.
 - **With one more day:** Pending; decide based on the completed work.
