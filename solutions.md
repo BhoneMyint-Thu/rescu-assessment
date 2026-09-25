@@ -182,6 +182,33 @@ automatic screen updates at midnight are outside this change.
 **Verification:** Reviewed and approved the implementation. Focused Dart
 analysis passed.
 
+## RES-107 — Deep link opens to a crash
+
+**Root cause:** `DealDetailsController.onInit()` cast
+`Get.arguments` directly to `DealModel`. Feed taps supply that object, but
+deep links supply an ID in the URL parameters without navigation arguments.
+The null cast failed before details initialization. The screen also read the
+`late final deal` immediately, so asynchronous loading needed a guarded UI.
+
+**Fix:** Use a supplied deal unless it conflicts with the URL ID;
+otherwise load through `DealRepo.fetchById`. Capture the ID and analytics
+source before awaiting. A nullable reactive deal replaces the `late final`
+field, and the screen shows loading or a retryable error before displaying
+the normal details and Add to bag button. Initialize availability, analytics,
+and the cart worker only after obtaining the deal.
+
+**Alternative considered:** Catching the null cast and showing a fallback
+would hide the crash without loading the requested deal, failing the ticket.
+
+**Edge cases:** Missing/non-numeric/non-positive IDs show an invalid-link
+message; missing deals and fetch failures show errors. Overlapping retries
+are ignored, and successful loads cannot register duplicate cart workers.
+Closure guards ignore late responses and preserve worker disposal from
+RES-103. Deal 42 exists in the catalog.
+
+**Verification:** Reviewed and approved the implementation. Focused Dart
+analysis passed.
+
 ## AI usage log
 
 - **Codex — preparation:** Explained the assessment requirements, project
@@ -208,6 +235,11 @@ analysis passed.
   labels, and home filter; checked Dart/intl behavior and reproduced the
   formatting and date-comparison bugs with a temporary Dart probe. Implemented
   the Bangkok-time fix and checked the model with Dart analysis. I reviewed and approved it.
+- **Codex — RES-107:** Compared feed navigation with the deep-link simulator,
+  traced route binding and controller initialization, identified the null
+  argument cast, and confirmed the existing fetch-by-ID path and deal 42.
+  Implemented the approved loading flow and guarded details UI, preserved
+  worker cleanup, and ran focused Dart analysis. I reviewed and approved it.
 
 **Incorrect or misleading suggestions:**
 
@@ -242,5 +274,6 @@ changes needed to make it testable.
 - **RES-104:** About 25 minutes for inspection and the solution.
 - **RES-105:** About 30 minutes of active work.
 - **RES-106:** About 10 minutes of active work.
-- **Remaining work:** RES-107, features, and design answers.
+- **RES-107:** Active time to be confirmed.
+- **Remaining work:** optional features, and design answers.
 - **With one more day:** Pending; decide based on the completed work.
