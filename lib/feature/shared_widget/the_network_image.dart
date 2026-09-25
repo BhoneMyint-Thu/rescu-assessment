@@ -21,25 +21,39 @@ class TheNetworkImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: borderRadius ?? BorderRadius.zero,
-      child: CachedNetworkImage(
-        imageUrl: url,
-        width: width,
-        height: height,
-        fit: fit,
-        placeholder: (context, _) => Shimmer.fromColors(
-          baseColor: Colors.grey.shade300,
-          highlightColor: Colors.grey.shade100,
-          child: Container(width: width, height: height, color: Colors.white),
-        ),
-        errorWidget: (context, _, __) => Container(
-          width: width,
-          height: height,
-          color: Colors.grey.shade200,
-          child: const Icon(Icons.image_not_supported_outlined),
-        ),
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final displayWidth =
+            constraints.constrainWidth(width ?? double.infinity);
+
+        final pixelRatio = MediaQuery.devicePixelRatioOf(context);
+        // Leaves as it is, if displayWidth is infinite and less than or equals 0
+        final cacheWidth = displayWidth.isFinite && displayWidth > 0
+            ? (displayWidth * pixelRatio).ceil()
+            : null;
+        return ClipRRect(
+          borderRadius: borderRadius ?? BorderRadius.zero,
+          child: CachedNetworkImage(
+            imageUrl: url,
+            width: width,
+            height: height,
+            fit: fit,
+            memCacheWidth: cacheWidth,
+            placeholder: (context, _) => Shimmer.fromColors(
+              baseColor: Colors.grey.shade300,
+              highlightColor: Colors.grey.shade100,
+              child:
+                  Container(width: width, height: height, color: Colors.white),
+            ),
+            errorWidget: (context, _, __) => Container(
+              width: width,
+              height: height,
+              color: Colors.grey.shade200,
+              child: const Icon(Icons.image_not_supported_outlined),
+            ),
+          ),
+        );
+      },
     );
   }
 }

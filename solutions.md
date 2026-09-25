@@ -99,6 +99,60 @@ but obsolete responses or responses after controller closure are ignored.
 **Verification:** Reviewed the implementation and ran focused Dart analysis:
 no issues found.
 
+## RES-105 — Home feed performance and image memory
+
+**Root cause:** The outer `Obx` observed every scroll-offset change and rebuilt
+the whole home scaffold. The eager children list also recreated `DealCard`
+widgets for every loaded deal. Separately, images decoded at the API's full
+1600×1200 resolution even when displayed in smaller cards.
+
+**Fix:** Replace the reactive offset with two threshold flags (`offset > 4`
+and `offset > 800`), observed separately by the app bar and scroll-to-top
+button. Use `ListView.builder` to create feed cards on demand. Read feed and
+filter state inside the body's `Obx`, before its deferred item builder runs.
+Use `LayoutBuilder` and device pixel ratio to set `memCacheWidth` from the
+image's displayed width, preserving its source aspect ratio.
+
+**Alternative considered:** `ListView.builder` alone would reduce widget
+construction but leave the scroll-triggered rebuilds and full-size image
+decoding. All three changes address separate costs.
+
+**Edge cases and limits:** Empty feeds and absent flash deals retain the
+header/filter. Refresh, pagination, and filtering still update the body.
+Unbounded or non-positive image widths fall back to the original decode size.
+Sizing uses width; sharpness for height-driven cover crops needs separate
+verification.
+
+**Before/after evidence:** DevTools Rebuild Stats captures show the following
+`Overall` build counts. Inspector captures show the same "Mystery Thai Feast"
+feed card's `RawImage.image` dimensions.
+
+| Measurement | Before | After |
+| --- | ---: | ---: | 
+| `DealCard` builds | 369 | 26 |
+| `TheNetworkImage` builds at the feed-card call site | 369 | 26 |
+| `CachedNetworkImage` builds | 385 | 30 |
+| `Shimmer` builds | 299 | 35 |
+| Decoded image dimensions | 1600×1200 | 992×744 |
+| Displayed image height (logical pixels) | 160 | 160 |
+| Estimated pixel-buffer memory for this image | 7.32 MiB | 2.82 MiB |
+
+Pixel-buffer estimates use `width × height × 4 / 1,048,576`: approximately
+**61.6% less per image** in this comparison. Build totals depend on the capture
+duration and scrolling; they are not a normalized frame-time benchmark.
+These results do not claim an equivalent reduction in total app memory.
+
+| Rebuilds — before | Rebuilds — after |
+| --- | --- |
+| ![Before: 369 DealCard builds](docs/evidence/res-105/rebuilds-before.png) | ![After: 26 DealCard builds](docs/evidence/res-105/rebuilds-after.png) |
+
+| Image decoding — before | Image decoding — after |
+| --- | --- |
+| ![Before: RawImage decoded at 1600 by 1200](docs/evidence/res-105/decode-before.png) | ![After: RawImage decoded at 992 by 744](docs/evidence/res-105/decode-after.png) |
+
+**Verification:** Reviewed and approved the implementation, captured the
+DevTools evidence above, and ran focused Dart analysis with no issues found.
+
 ## AI usage log
 
 - **Codex — preparation:** Explained the assessment requirements, project
@@ -116,6 +170,11 @@ no issues found.
   page response corrupts page state, and implemented an initial fix that I
   rejected as too complicated to maintain. Reviewed my simpler replacement
   and ran focused Dart analysis.
+- **Codex — RES-105:** Traced generated image URLs into the image widget,
+  explained rebuild and decoded-image costs, and implemented scoped scroll
+  reactivity, lazy feed cards, and image decode sizing. I reviewed and approved
+  the changes and simplified the sizing to use display width. Codex checked
+  the code with Dart analysis and helped summarize my DevTools screenshots.
 
 **Incorrect or misleading suggestions:**
 
@@ -148,6 +207,6 @@ changes needed to make it testable.
 - **RES-102:** About 5 minutes.
 - **RES-103:** About 10 minutes for inspection and the solution.
 - **RES-104:** About 25 minutes for inspection and the solution.
-- **Remaining work:** RES-105 through
-  RES-107, features, and design answers.
+- **RES-105:** About 30 minutes of active work.
+- **Remaining work:** RES-106 and RES-107, features, and design answers.
 - **With one more day:** Pending; decide based on the completed work.
