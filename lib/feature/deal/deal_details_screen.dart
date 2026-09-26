@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../app_config.dart';
+import '../shared_widget/flash_sale_countdown.dart';
+import '../shared_widget/flash_sale_expiry_builder.dart';
 import '../shared_widget/the_network_image.dart';
 import 'deal_details_controller.dart';
 
@@ -68,6 +70,22 @@ class DealDetailsScreen extends GetView<DealDetailsController> {
                         style: TextStyle(
                             fontSize: 13, color: Colors.grey.shade500)),
                     const SizedBox(height: 16),
+                    if (deal.isFlashSale) ...[
+                      Row(
+                        children: [
+                          const Icon(Icons.bolt, color: Colors.red, size: 20),
+                          const Text('Flash sale · '),
+                          FlashSaleCountdown(
+                            endsAt: deal.flashSaleEndsAt!,
+                            style: const TextStyle(
+                              color: Colors.red,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                     Row(
                       children: [
                         Text('฿${deal.price.toStringAsFixed(0)}',
@@ -160,10 +178,15 @@ class DealDetailsScreen extends GetView<DealDetailsController> {
           color: Colors.white,
           child: SizedBox(
             width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: controller.addToCart,
-              icon: const Icon(Icons.add_shopping_cart),
-              label: const Text('Add to bag'),
+            child: FlashSaleExpiryBuilder(
+              endsAt: deal.flashSaleEndsAt,
+              builder: (context, expired) => FilledButton.icon(
+                onPressed: expired ? null : controller.addToCart,
+                icon: Icon(expired
+                    ? Icons.timer_off_outlined
+                    : Icons.add_shopping_cart),
+                label: Text(expired ? 'Expired' : 'Add to bag'),
+              ),
             ),
           ),
         ),

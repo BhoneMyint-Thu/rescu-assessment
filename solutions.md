@@ -209,6 +209,31 @@ RES-103. Deal 42 exists in the catalog.
 **Verification:** Reviewed and approved the implementation. Focused Dart
 analysis passed.
 
+## F-1 — Live flash-sale countdowns
+
+**Implementation:** A shared clock drives countdown text in the flash rail,
+feed/search cards, and details. A separate expiry builder updates cards and
+the purchase button only when their expired state changes. Expired cards stay
+visible but muted and disabled. The cart checks the actual deadline when
+adding/increasing quantity and removes expired lines with a visible notice,
+independently of mounted screens.
+
+**Alternative considered:** Widget-owned expiry callbacks would miss bag
+cleanup when a card is off-screen. The app-wide cart owns that rule, while
+one shared timer avoids a separate timer for every countdown.
+
+**Edge cases and decisions:** Ordinary deals have no flash expiry. Positive
+fractions of a second round up; zero/past deadlines show `Expired`. Resume
+refreshes the clock immediately. Checkout removes expired lines and stops
+for review if the bag changes. An order submitted while valid honors the
+backend response even if its flash sale expires while awaiting that response.
+Timers and workers are cleaned up by their owners.
+
+**Verification:** Reviewed and approved the implementation. Focused Dart
+analysis passed. A temporary Dart probe passed 21 formatting/model checks,
+including exact expiry and timezone-equivalent instants. Flutter runtime
+checks and DevTools profiling with 100+ countdowns have not yet been confirmed.
+
 ## AI usage log
 
 - **Codex — preparation:** Explained the assessment requirements, project
@@ -240,6 +265,13 @@ analysis passed.
   argument cast, and confirmed the existing fetch-by-ID path and deal 42.
   Implemented the approved loading flow and guarded details UI, preserved
   worker cleanup, and ran focused Dart analysis. I reviewed and approved it.
+- **Codex — F-1:** Read the feature brief and current flash rail, shared
+  card, details, and bag code to clarify countdown placement, expiry behavior,
+  and performance requirements. Implemented the approved plan using a shared
+  clock, scoped countdown/expiry widgets, and cart expiry guards. Ran focused
+  Dart analysis and a temporary probe with 21 logic checks. Simplified the
+  countdown formatter to use Duration getters after my readability feedback,
+  preserving its round-up behavior. I reviewed and approved the implementation.
 
 **Incorrect or misleading suggestions:**
 
@@ -274,6 +306,7 @@ changes needed to make it testable.
 - **RES-104:** About 25 minutes for inspection and the solution.
 - **RES-105:** About 30 minutes of active work.
 - **RES-106:** About 10 minutes of active work.
-- **RES-107:** Active time to be confirmed.
-- **Remaining work:** optional features, and design answers.
+- **RES-107:** About 15 minutes of active work.
+- **F-1:** About 1 hour of active work.
+- **Remaining work:** further features if attempted, and design answers.
 - **With one more day:** Pending; decide based on the completed work.
