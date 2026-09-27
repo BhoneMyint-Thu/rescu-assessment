@@ -127,27 +127,27 @@ verification.
 `Overall` build counts. Inspector captures show the same "Mystery Thai Feast"
 feed card's `RawImage.image` dimensions.
 
-| Measurement | Before | After |
-| --- | ---: | ---: | 
-| `DealCard` builds | 369 | 26 |
-| `TheNetworkImage` builds at the feed-card call site | 369 | 26 |
-| `CachedNetworkImage` builds | 385 | 30 |
-| `Shimmer` builds | 299 | 35 |
-| Decoded image dimensions | 1600×1200 | 992×744 |
-| Displayed image height (logical pixels) | 160 | 160 |
-| Estimated pixel-buffer memory for this image | 7.32 MiB | 2.82 MiB |
+| Measurement                                         |    Before |    After |
+| --------------------------------------------------- | --------: | -------: |
+| `DealCard` builds                                   |       369 |       26 |
+| `TheNetworkImage` builds at the feed-card call site |       369 |       26 |
+| `CachedNetworkImage` builds                         |       385 |       30 |
+| `Shimmer` builds                                    |       299 |       35 |
+| Decoded image dimensions                            | 1600×1200 |  992×744 |
+| Displayed image height (logical pixels)             |       160 |      160 |
+| Estimated pixel-buffer memory for this image        |  7.32 MiB | 2.82 MiB |
 
 Pixel-buffer estimates use `width × height × 4 / 1,048,576`: approximately
 **61.6% less per image** in this comparison. Build totals depend on the capture
 duration and scrolling; they are not a normalized frame-time benchmark.
 These results do not claim an equivalent reduction in total app memory.
 
-| Rebuilds — before | Rebuilds — after |
-| --- | --- |
+| Rebuilds — before                                                         | Rebuilds — after                                                       |
+| ------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
 | ![Before: 369 DealCard builds](docs/evidence/res-105/rebuilds-before.png) | ![After: 26 DealCard builds](docs/evidence/res-105/rebuilds-after.png) |
 
-| Image decoding — before | Image decoding — after |
-| --- | --- |
+| Image decoding — before                                                              | Image decoding — after                                                           |
+| ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
 | ![Before: RawImage decoded at 1600 by 1200](docs/evidence/res-105/decode-before.png) | ![After: RawImage decoded at 992 by 744](docs/evidence/res-105/decode-after.png) |
 
 **Verification:** Reviewed and approved the implementation, captured the
@@ -251,10 +251,10 @@ are no longer dimmed.
 3. Removed the opacity widgets and observed the home screen after expiry
    again. Captured the before/after results below.
 
-| Screenshot metric | Before: expired cards at 0.5 opacity | After: opacity removed |
-| --- | --- | --- |
-| Displayed average FPS | 57 | 60 |
-| Slow frames in the visible chart window | Repeated red bars | No red bars |
+| Screenshot metric                       | Before: expired cards at 0.5 opacity | After: opacity removed |
+| --------------------------------------- | ------------------------------------ | ---------------------- |
+| Displayed average FPS                   | 57                                   | 60                     |
+| Slow frames in the visible chart window | Repeated red bars                    | No red bars            |
 
 These captures show improvement in the observed windows; they do not establish
 zero jank throughout the full session or replace the 100+ countdown stress check.
@@ -266,6 +266,84 @@ Before:
 After:
 
 ![F-1 after: opacity removed, with no slow frames in the visible window](docs/evidence/f-1/expiry-opacity-after.png)
+
+## F-2 — Impression tracking
+
+**Implementation:** A shared card wrapper starts a one-second timer at 50%
+visibility and cancels it below that threshold, on route/background changes,
+or disposal. Visibility callbacks run after each frame and do not rebuild
+cards. The session-wide analytics service accepts only the first impression
+per deal ID, with its source and zero-based list position (excluding the home
+header). It batches impressions at 10 events or 15 seconds from the first
+waiting event; existing screen/detail events remain local debug history.
+
+**Alternative considered:** Logging from `build()` would count off-screen
+cards and rebuilds. A per-card deduplication flag would reset when cards are
+recreated and allow duplicates across screens. A sliding batch timer would
+postpone delivery whenever another event arrived.
+
+**Edge cases and limits:** Visibility interruptions reset the full second;
+changes that stay above 50% do not restart it. First qualification determines
+source/position. Detector keys are unique per card instance. Only the current
+route and active app count; arbitrary overlapping widgets remain a detector
+limitation. Failed batches remain queued for retry, new arrivals survive an
+in-flight send, and requests do not overlap. Session state and pending events
+are in memory and do not survive process termination.
+
+**Verification:** Reviewed and approved the implementation. Focused Dart
+analysis passed during implementation and after merging with the F-1 expiry
+fix. Manual batching and performance evidence are below. Flutter test
+execution has not been confirmed.
+
+**Manual batching check (2026-09-28):** Scrolled the home feed to generate
+11 `deal_impression` events, then waited for the remaining event to flush.
+The logs include `deal_id`, `source: home_feed`, and zero-based `position`.
+
+| Logged time | Result |
+| --- | --- |
+| 01:28:15.546–01:28:26.995 | 11 distinct deal impressions logged |
+| 01:28:27.383 | `POST /analytics/batch events=10` |
+| 01:28:42.428 | `POST /analytics/batch events=1` |
+
+The two batch logs are 15.045 seconds apart. This confirms the 10-event
+flush and the timed flush of the remaining event in this run. The fake API
+logs after its simulated latency, so log timestamps include that delay.
+
+![F-2 batching: 11 impressions delivered as 10 events followed by 1 about 15 seconds later](docs/evidence/f-2/batching-10-then-1.png)
+
+**Before/after performance check (2026-09-28):** Compared F-1 (before impression tracking) with F-2 on the same physical
+Pixel 6a in profile mode. Both screenshots show the Impeller renderer.
+
+Performance test procedure:
+
+1. Open the home feed and observe DevTools Performance.
+2. Scroll to the end of five pages.
+3. Return to the top and leave the app untouched for 10 seconds.
+4. Capture the displayed frame chart for comparison.
+
+| Measurement shown in DevTools           | Before F-2 (corrected F-1) | After F-2 |
+| --------------------------------------- | -------------------------: | --------: |
+| Displayed average FPS                   |                         60 |        60 |
+| Target FPS                              |                         60 |        60 |
+| Renderer                                |                   Impeller |  Impeller |
+| Slow frames in the visible chart window |                       None |      None |
+
+**Observation:** Both captures report 60 FPS on average. The visible UI/raster
+bars stay below the approximately 16.7 ms frame-budget line in both windows,
+with no red slow-frame bars. No obvious regression is visible in this spot check.
+
+**Evidence limits:** These are one before/after screenshot pair showing a
+limited frame window from each run, not complete scrolling traces.
+They do not establish full-run slow-frame percentages, p95 frame times, or
+repeatability across multiple runs.
+
+**Before F-2 — F-1 after the raster fix:**
+
+![Before F-2: corrected F-1 on Pixel 6a in profile mode, showing 60 FPS average](docs/evidence/f-1/expiry-opacity-after.png)
+
+**After F-2 — impression tracking enabled:**
+
+![After F-2: Pixel 6a in profile mode, showing 60 FPS average](docs/evidence/f-2/performance-after.png)
 
 ## AI usage log
 
@@ -309,6 +387,14 @@ After:
   whole-card opacity by forcing it before expiry, and removed it from the
   cards. I also replaced expired card countdowns with static labels. Codex
   helped interpret the rendering cost and document my before/after screenshots.
+- **Codex — F-2:** Traced the local analytics/debug flow, the batch
+  endpoint, and card locations. Checked the installed visibility detector's
+  callback timing and limitations; explained continuous visibility, session
+  deduplication, event metadata, and batching. Implemented the approved tracker
+  and batching flow. Helped define the before/after
+  performance check and documented my Pixel 6a profile-mode screenshots and
+  testing steps above, plus my manual 10-then-1 batching evidence. I reviewed
+  and approved the implementation.
 
 **Incorrect or misleading suggestions:**
 
@@ -350,5 +436,6 @@ changes needed to make it testable.
 - **RES-107:** About 15 minutes of active work.
 - **F-1:** About 1 hour 15 minutes of active work (1 hour implementation/review
   plus 15 minutes for the performance correction).
+- **F-2:** About 1 hour of active work, excluding the F-1 performance correction.
 - **Remaining work:** further features if attempted, and design answers.
 - **With one more day:** Pending; decide based on the completed work.

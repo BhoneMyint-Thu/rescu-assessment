@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:visibility_detector/visibility_detector.dart';
 
 import 'app_config.dart';
 import 'repository/deal_repo.dart';
@@ -13,13 +14,15 @@ import 'service/fake_api_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Report each frame's visibility changes so brief interruptions reset dwell.
+  VisibilityDetectorController.instance.updateInterval = Duration.zero;
   await initDependencies();
   runApp(const RescuApp());
 }
 
 Future<void> initDependencies() async {
   await Get.putAsync(() => FakeApiService().init(), permanent: true);
-  Get.put(AnalyticsService(), permanent: true);
+  Get.put(AnalyticsService(api: Get.find()), permanent: true);
   Get.put(ClockService(), permanent: true);
   Get.put(CartService(clock: Get.find()), permanent: true);
   Get.lazyPut(() => DealRepo(api: Get.find()), fenix: true);
