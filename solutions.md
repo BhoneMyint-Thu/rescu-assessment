@@ -214,7 +214,7 @@ analysis passed.
 **Implementation:** A shared clock drives countdown text in the flash rail,
 feed/search cards, and details. A separate expiry builder updates cards and
 the purchase button only when their expired state changes. Expired cards stay
-visible but muted and disabled. The cart checks the actual deadline when
+visible, labelled `Expired`, and disabled. The cart checks the actual deadline when
 adding/increasing quantity and removes expired lines with a visible notice,
 independently of mounted screens.
 
@@ -229,10 +229,43 @@ for review if the bag changes. An order submitted while valid honors the
 backend response even if its flash sale expires while awaiting that response.
 Timers and workers are cleaned up by their owners.
 
-**Verification:** Reviewed and approved the implementation. Focused Dart
+**Initial verification:** Reviewed and approved the implementation. Focused Dart
 analysis passed. A temporary Dart probe passed 21 formatting/model checks,
-including exact expiry and timezone-equivalent instants. Flutter runtime
-checks and DevTools profiling with 100+ countdowns have not yet been confirmed.
+including exact expiry and timezone-equivalent instants. DevTools profiling
+with 100+ countdowns has not yet been confirmed.
+
+**Performance correction:** Applying `Opacity(0.5)` to whole expired cards
+added offscreen compositing work and recurring raster jank. This rendering
+cost can occur without rebuilding the whole card. Removed that opacity from
+the shared feed/search cards and flash rail. These cards also replace the
+countdown with plain `Text('Expired')` at expiry, disposing the countdown's
+reactive subscription. Expired labels and disabled taps remain; the cards
+are no longer dimmed.
+
+**Manual verification:** Profile mode on a physical Pixel 6a, using Impeller.
+
+1. Observed the home screen before and after expiry. With whole-card opacity
+   set to 0.5 after expiry, recurring slow raster frames appeared.
+2. Forced opacity to 0.5 from the start: jank appeared before expiry too,
+   isolating opacity as the cause rather than the `Expired` text itself.
+3. Removed the opacity widgets and observed the home screen after expiry
+   again. Captured the before/after results below.
+
+| Screenshot metric | Before: expired cards at 0.5 opacity | After: opacity removed |
+| --- | --- | --- |
+| Displayed average FPS | 57 | 60 |
+| Slow frames in the visible chart window | Repeated red bars | No red bars |
+
+These captures show improvement in the observed windows; they do not establish
+zero jank throughout the full session or replace the 100+ countdown stress check.
+
+Before:
+
+![F-1 before: expired cards with opacity, showing recurring raster jank](docs/evidence/f-1/expiry-opacity-before.png)
+
+After:
+
+![F-1 after: opacity removed, with no slow frames in the visible window](docs/evidence/f-1/expiry-opacity-after.png)
 
 ## AI usage log
 
@@ -272,6 +305,10 @@ checks and DevTools profiling with 100+ countdowns have not yet been confirmed.
   Dart analysis and a temporary probe with 21 logic checks. Simplified the
   countdown formatter to use Duration getters after my readability feedback,
   preserving its round-up behavior. I reviewed and approved the implementation.
+- **Codex — F-1 performance correction:** I profiled expiry behavior, isolated
+  whole-card opacity by forcing it before expiry, and removed it from the
+  cards. I also replaced expired card countdowns with static labels. Codex
+  helped interpret the rendering cost and document my before/after screenshots.
 
 **Incorrect or misleading suggestions:**
 
@@ -281,6 +318,10 @@ checks and DevTools profiling with 100+ countdowns have not yet been confirmed.
    condition fix harder to understand and maintain. I discarded the changes
    and implemented a simpler solution using a refresh flag, feed version,
    and the existing refresh-controller methods.
+2. **F-1 — Expensive expired-card dimming:** Codex's initial implementation
+   wrapped whole cards in fractional opacity after expiry. Profiling on my
+   Pixel 6a exposed recurring raster jank. I isolated the opacity cost and
+   removed the wrappers, retaining the `Expired` label and disabled taps.
 
 ## Design questions
 
@@ -307,6 +348,7 @@ changes needed to make it testable.
 - **RES-105:** About 30 minutes of active work.
 - **RES-106:** About 10 minutes of active work.
 - **RES-107:** About 15 minutes of active work.
-- **F-1:** About 1 hour of active work.
+- **F-1:** About 1 hour 15 minutes of active work (1 hour implementation/review
+  plus 15 minutes for the performance correction).
 - **Remaining work:** further features if attempted, and design answers.
 - **With one more day:** Pending; decide based on the completed work.
