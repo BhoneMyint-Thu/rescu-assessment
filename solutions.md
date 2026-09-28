@@ -299,11 +299,11 @@ execution has not been confirmed.
 11 `deal_impression` events, then waited for the remaining event to flush.
 The logs include `deal_id`, `source: home_feed`, and zero-based `position`.
 
-| Logged time | Result |
-| --- | --- |
+| Logged time               | Result                              |
+| ------------------------- | ----------------------------------- |
 | 01:28:15.546–01:28:26.995 | 11 distinct deal impressions logged |
-| 01:28:27.383 | `POST /analytics/batch events=10` |
-| 01:28:42.428 | `POST /analytics/batch events=1` |
+| 01:28:27.383              | `POST /analytics/batch events=10`   |
+| 01:28:42.428              | `POST /analytics/batch events=1`    |
 
 The two batch logs are 15.045 seconds apart. This confirms the 10-event
 flush and the timed flush of the remaining event in this run. The fake API
@@ -344,6 +344,52 @@ repeatability across multiple runs.
 **After F-2 — impression tracking enabled:**
 
 ![After F-2: Pixel 6a in profile mode, showing 60 FPS average](docs/evidence/f-2/performance-after.png)
+
+## F-3 — Stock reservations
+
+**Implementation:** The app-wide cart owns reservations and checkout. Adding
+or changing quantity updates the bag immediately with a pending state, then
+reserves through `OrderRepo`. Failed initial reservations or quantity
+replacements remove the unreserved line with a friendly notice. The user can
+explicitly try adding it again. Pending lines cannot change quantity or enter checkout.
+Each confirmed line shows its backend deadline using the shared clock; only
+the countdown text rebuilds each second. Removal and F-1 expiry release holds.
+
+**Quantity changes and alternative considered:** The API cannot resize a
+hold. Release the old reservation, then reserve the full new quantity. A
+replacement has a new five-minute deadline. If replacement fails, remove the
+line with a notice because its old hold has already been released. Never reuse
+the released ID. Automatic recovery to the previous quantity was considered
+and rejected: it adds another request and more failure states, and can restore
+a quantity the user no longer wants. Keep retries explicit.
+
+**Expiry decision:** Remove expired reservations with a visible notice and
+let the user add the deal again if available. Do not automatically renew
+holds. Expiry is checked on clock ticks, resume, and before checkout. If
+validation removes anything, stop checkout so the user can review the bag.
+This avoids silently purchasing a changed selection or holding stock
+indefinitely without another user action.
+
+**Mid-checkout decision:** Lock bag edits and retain the submitted items for
+the request. Expiry can remove lines locally, but their holds are released
+only after the backend responds. Honor success even if the local deadline
+passed while waiting. A `410` removes expired holds; if no local expiry
+explains it, invalidate all submitted holds because the API does not identify
+the unknown reservation. Show a clear message and require an explicit retry.
+Other failures keep still-valid items. Never automatically resubmit checkout.
+
+**Edge cases and limits:** One reservation operation per line; removed and
+re-added deals use different item instances, so late successes are released
+instead of restoring an obsolete item. Pending requests also check flash-sale
+expiry after completion. Checkout survives screen disposal. Bag state is not
+persisted across app restarts; failed release cleanup is logged and the
+backend's five-minute deadline remains the fallback.
+
+**Verification:** Focused Dart analysis passed. All tests passed, covering optimistic rollback, quantity replacement, removal on failed increases and decreases without automatic retry, late responses,
+flash/reservation expiry, checkout payloads and locking, success after expiry,
+`410` reconciliation, and retry after other failures. Initial failures came
+from queued snackbar timers in test cleanup; closing notices individually
+fixed cleanup without changing the reservation logic or assertions.
 
 ## AI usage log
 
@@ -396,6 +442,16 @@ repeatability across multiple runs.
   testing steps above, plus my manual 10-then-1 batching evidence. I reviewed
   and approved the implementation.
 
+- **Codex — F-3:** Inspected the existing cart and reservation API, explained
+  the proposed flow, and implemented the approved optimistic reservation and
+  expiry policy. Added pending/countdown UI and focused tests; documented the
+  quantity-replacement tradeoff and mid-checkout decisions. At my request,
+  ran the tests and fixed queued snackbar cleanup in the test helper. We tried
+  automatic recovery of the previous quantity, then removed it after review
+  to keep failure handling simple and retries explicit. Confirmed all 10 final
+  reservation tests pass and focused Dart analysis is clean. I reviewed and
+  approved the final implementation.
+
 **Incorrect or misleading suggestions:**
 
 1. **RES-104 — Overcomplicated implementation:** Codex added a separate load
@@ -437,5 +493,6 @@ changes needed to make it testable.
 - **F-1:** About 1 hour 15 minutes of active work (1 hour implementation/review
   plus 15 minutes for the performance correction).
 - **F-2:** About 1 hour of active work, excluding the F-1 performance correction.
+- **F-3:** About 1 hour 30 minutes of active code review.
 - **Remaining work:** further features if attempted, and design answers.
 - **With one more day:** Pending; decide based on the completed work.

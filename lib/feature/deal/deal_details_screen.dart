@@ -180,13 +180,26 @@ class DealDetailsScreen extends GetView<DealDetailsController> {
             width: double.infinity,
             child: FlashSaleExpiryBuilder(
               endsAt: deal.flashSaleEndsAt,
-              builder: (context, expired) => FilledButton.icon(
-                onPressed: expired ? null : controller.addToCart,
-                icon: Icon(expired
-                    ? Icons.timer_off_outlined
-                    : Icons.add_shopping_cart),
-                label: Text(expired ? 'Expired' : 'Add to bag'),
-              ),
+              builder: (context, expired) => Obx(() {
+                final cart = controller.cartService;
+                final reserving = cart.isReserving(deal.id);
+                final checkingOut = cart.isCheckingOut.value;
+                return FilledButton.icon(
+                  onPressed: expired || reserving || checkingOut
+                      ? null
+                      : controller.addToCart,
+                  icon: Icon(expired
+                      ? Icons.timer_off_outlined
+                      : Icons.add_shopping_cart),
+                  label: Text(expired
+                      ? 'Expired'
+                      : reserving
+                          ? 'Reserving…'
+                          : checkingOut
+                              ? 'Checking out…'
+                              : 'Add to bag'),
+                );
+              }),
             ),
           ),
         ),
