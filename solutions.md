@@ -451,6 +451,9 @@ fixed cleanup without changing the reservation logic or assertions.
   to keep failure handling simple and retries explicit. Confirmed all 10 final
   reservation tests pass and focused Dart analysis is clean. I reviewed and
   approved the final implementation.
+- **Codex — written deliverables:** Drafted concise design answers from the
+  implementation and recorded my extra-day priority: polishing F-3's flow
+  and user experience.
 
 **Incorrect or misleading suggestions:**
 
@@ -469,17 +472,32 @@ fixed cleanup without changing the reservation logic or assertions.
 
 ### Q1 — GetX controller lifecycle versus widget State lifecycle
 
-Pending: explain the distinction and identify a relevant Part A bug.
+A widget `State` belongs to a mounted widget: initialize in `initState()` and
+clean up in `dispose()`. A `GetxController` is managed by GetX registration and
+route bindings, using `onInit()` and `onClose()`; rebuilding or removing a
+widget does not itself define the controller's lifetime. RES-103 left an
+`ever` worker subscribed to the permanent cart after the details controller
+closed. The controller must explicitly dispose that worker in `onClose()`.
 
 ### Q2 — Scoping Obx reactivity
 
-Pending: explain when a large reactive subtree hurts performance and how to
-choose the appropriate scope.
+A large `Obx` hurts when a frequently changing value rebuilds UI that does
+not depend on it. In RES-105, reading the scroll offset around the feed caused
+unnecessary card builds. Put each reactive read near the UI it affects, and
+observe the needed state: the shadow needs `offset > 4`, and the button needs
+`offset > 800`. Check rebuild counts and frame timings in DevTools before
+splitting widgets further.
 
 ### Q3 — Automated coverage for RES-106
 
-Pending: describe a test that would catch the pickup-time bug and any code
-changes needed to make it testable.
+I would write **unit tests** for `PickupWindowModel`: verify that UTC pickup
+times display as Bangkok times (23:00 UTC becomes 06:00 the next day), and
+that "Pickup today" uses Bangkok's date around midnight, including month/year
+boundaries and overnight windows. To make the tests deterministic, pass the
+current time into `isTodayAt(DateTime now)` instead of reading `DateTime.now()`
+inside the tested logic. This supplies the time dependency directly; no mock
+API or dependency-injection framework is needed. The RES-106 fix already
+added this method, while the `isToday` getter supplies the real current time.
 
 ## Time spent and next steps
 
@@ -494,5 +512,8 @@ changes needed to make it testable.
   plus 15 minutes for the performance correction).
 - **F-2:** About 1 hour of active work, excluding the F-1 performance correction.
 - **F-3:** About 1 hour 30 minutes of active code review.
-- **Remaining work:** further features if attempted, and design answers.
-- **With one more day:** Pending; decide based on the completed work.
+- **Remaining work:** NONE
+- **With one more day:** I would polish F-3's flow and user experience,
+  especially quantity changes, reservation failures, and expiry during
+  checkout. I would make pending states and recovery messages clearer, then
+  test those flows on a real device to check that the next action is obvious.
